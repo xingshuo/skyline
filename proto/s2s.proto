@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+// protoc --proto_path=.\proto\ --go_out=.\proto\generate .\proto\*.proto
+
+package s2sproto;
+
+enum SSCmd {
+  INVALID_CMD = 0;
+
+  REQ_CLUSTER_REQUEST     = 10000;
+  RSP_CLUSTER_RESPONSE    = 10001;
+}
+
+enum SSError {
+  OK = 0;
+  ERR_RPC_TIMEOUT = -10001;
+}
+
+message ReqClusterRequest {
+  string SrcCluster = 1;
+  string SrcService = 2;
+  string DstService = 3;
+  uint32 Session = 4;
+  bytes  Request = 5;
+}
+
+message RspClusterResponse {
+  string  SrcCluster = 1;
+  string  SrcService = 2;
+  string  DstService = 3;
+  uint32  Session = 4;
+  bytes   Response = 5;
+  string  ErrMsg = 6;
+}
+
+message SSMsg {
+  SSCmd cmd = 1;
+  oneof Msg
+  {
+    ReqClusterRequest     cluster_request     = 100;
+    RspClusterResponse    cluster_response    = 101;
+  }
+}

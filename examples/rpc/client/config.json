@@ -1,0 +1,7 @@
+{
+  "ClusterName": "rpc_client",
+  "IsRecoverModel": false,
+  "LogFilename": "",
+  "LogLevel": 0,
+  "MeshConfig": "clustername.json"
+}
