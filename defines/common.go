@@ -1,9 +1,12 @@
 package defines
 
+import "time"
+
 type SVC_HANDLE uint64
 
 const (
-	DEFAULT_MQ_SIZE = 1024
+	DefaultMQSize       = 1024
+	DefaultSSRpcTimeout = 6 * time.Second
 )
 
 const (

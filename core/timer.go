@@ -38,7 +38,7 @@ func (tp *TimerPool) Release() {
 	tp.seqSlots = make(map[time.Duration]*list.List)
 }
 
-func (tp *TimerPool) NewTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
+func (tp *TimerPool) NewGoTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
 	if interval <= 0 {
 		log.Warning("new timer interval <= 0, convert to Spawn")
 		tp.service.Spawn(func(ctx context.Context, _ ...interface{}) {
@@ -62,7 +62,7 @@ func (tp *TimerPool) NewTimer(callOut TimerFunc, interval time.Duration, count i
 	return id
 }
 
-func (tp *TimerPool) NewSeqTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
+func (tp *TimerPool) NewFrameTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
 	if interval <= 0 {
 		log.Warning("new seq timer interval <= 0, convert to Spawn")
 		tp.service.Spawn(func(ctx context.Context, _ ...interface{}) {
@@ -144,12 +144,12 @@ func (tp *TimerPool) OnTimeout(ctx context.Context, id uint32) {
 			if t.count == 0 {
 				delete(tp.timers, id)
 			} else {
-				time.AfterFunc(time.Duration(t.interval)*time.Millisecond, func() {
+				time.AfterFunc(t.interval, func() {
 					tp.service.PushMsg(0, proto.PTYPE_TIMER, id)
 				})
 			}
 		} else {
-			time.AfterFunc(time.Duration(t.interval)*time.Millisecond, func() {
+			time.AfterFunc(t.interval, func() {
 				tp.service.PushMsg(0, proto.PTYPE_TIMER, id)
 			})
 		}

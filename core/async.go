@@ -54,38 +54,25 @@ func (ap *AsyncPool) AsyncCallRemote(ctx context.Context, clusterName, svcName s
 	}
 	var timerSeq uint32
 	timeout, _ := ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
-	if timeout > 0 {
-		timerSeq = ap.service.NewTimer(func(ctx context.Context) {
-			ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
-		}, timeout, 1)
+	if timeout <= 0 {
+		timeout = defines.DefaultSSRpcTimeout
 	}
+	timerSeq = ap.service.NewTimer(func(ctx context.Context) {
+		ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
+	}, timeout, 1)
 	ap.cbFuncs[seq] = func(ctx context.Context, reply interface{}, err error) {
-		if timerSeq != 0 {
-			ap.service.StopTimer(timerSeq)
-		}
+		ap.service.StopTimer(timerSeq)
 		cb(ctx, reply, err)
 	}
 	return nil
 }
 
 func (ap *AsyncPool) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
-	if cb == nil {
-		go func() {
-			defer func() {
-				if config.ServerConf.IsRecoverModel {
-					if e := recover(); e != nil {
-						log.Errorf("panic occurred on Go req func err: %v", e)
-					}
-				}
-			}()
-
-			f()
-		}()
-		return
+	var seq uint32
+	if cb != nil {
+		seq = ap.service.NewSession()
+		ap.cbFuncs[seq] = cb
 	}
-
-	seq := ap.service.NewSession()
-	ap.cbFuncs[seq] = cb
 	go func() {
 		defer func() {
 			if config.ServerConf.IsRecoverModel {
@@ -94,17 +81,21 @@ func (ap *AsyncPool) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
 				}
 			}
 		}()
+		if seq == 0 {
+			f()
+			return
+		}
+
 		var timerSeq uint32
 		timeout, _ := ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
-		if timeout > 0 {
-			timerSeq = ap.service.NewTimer(func(ctx context.Context) {
-				ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
-			}, timeout, 1)
+		if timeout <= 0 {
+			timeout = defines.DefaultSSRpcTimeout
 		}
+		timerSeq = ap.service.NewTimer(func(ctx context.Context) {
+			ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
+		}, timeout, 1)
 		rsp, err := f()
-		if timerSeq != 0 {
-			ap.service.StopTimer(timerSeq)
-		}
+		ap.service.StopTimer(timerSeq)
 		ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, seq, &proto.RpcResponse{
 			Reply: rsp,
 			Err:   err,
@@ -112,38 +103,52 @@ func (ap *AsyncPool) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
 	}()
 }
 
+type LinearPair struct {
+	f     GoReqFunc
+	cbSeq uint32
+}
+
 func (ap *AsyncPool) LinearGo(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
-	seq := ap.service.NewSession()
-	ap.cbFuncs[seq] = cb
+	var seq uint32
+	if cb != nil {
+		seq = ap.service.NewSession()
+		ap.cbFuncs[seq] = cb
+	}
 	ap.linearMutex.Lock()
-	ap.linearQueue.Enqueue(f)
+	ap.linearQueue.Enqueue(&LinearPair{
+		f:     f,
+		cbSeq: seq,
+	})
 	ap.linearMutex.Unlock()
 	go func() {
 		ap.execMutex.Lock()
 		defer ap.execMutex.Unlock()
 		ap.linearMutex.Lock()
-		hf := ap.linearQueue.Dequeue().(GoReqFunc)
+		pair := ap.linearQueue.Dequeue().(*LinearPair)
 		ap.linearMutex.Unlock()
-
 		defer func() {
 			if config.ServerConf.IsRecoverModel {
 				if e := recover(); e != nil {
-					log.Errorf("panic occurred on LinearAsync req func err: %v, seq: %v", e, seq)
+					log.Errorf("panic occurred on LinearAsync req func err: %v, seq: %v", e, pair.cbSeq)
 				}
 			}
 		}()
+		if pair.cbSeq == 0 { // no callback
+			pair.f()
+			return
+		}
+
 		var timerSeq uint32
 		timeout, _ := ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
-		if timeout > 0 {
-			timerSeq = ap.service.NewTimer(func(ctx context.Context) {
-				ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
-			}, timeout, 1)
+		if timeout <= 0 {
+			timeout = defines.DefaultSSRpcTimeout
 		}
-		rsp, err := hf()
-		if timerSeq != 0 {
-			ap.service.StopTimer(timerSeq)
-		}
-		ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, seq, &proto.RpcResponse{
+		timerSeq = ap.service.NewTimer(func(ctx context.Context) {
+			ap.OnAsyncCb(ctx, pair.cbSeq, nil, defines.ErrRpcTimeout)
+		}, timeout, 1)
+		rsp, err := pair.f()
+		ap.service.StopTimer(timerSeq)
+		ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, pair.cbSeq, &proto.RpcResponse{
 			Reply: rsp,
 			Err:   err,
 		})

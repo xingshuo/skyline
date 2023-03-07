@@ -41,7 +41,7 @@ type Service struct {
 
 func (s *Service) Init(module interfaces.Module, tickPrecision time.Duration) error {
 	s.ctx = context.WithValue(context.Background(), defines.CtxKeyService, s)
-	s.mqueue = NewMQueue(defines.DEFAULT_MQ_SIZE)
+	s.mqueue = NewMQueue(defines.DefaultMQSize)
 	s.msgNotify = make(chan struct{}, 1)
 	s.exitNotify = lib.NewSyncEvent()
 	s.exitDone = lib.NewSyncEvent()
@@ -51,6 +51,9 @@ func (s *Service) Init(module interfaces.Module, tickPrecision time.Duration) er
 	s.asyncPool.Init(s)
 	s.module = module
 	if tickPrecision > 0 {
+		if tickPrecision > time.Second {
+			log.Warningf("%s tick precision (%ds) > 1s", s, tickPrecision/time.Second)
+		}
 		s.ticker = time.NewTicker(tickPrecision)
 	}
 	return s.module.Init(s.ctx)
@@ -94,18 +97,15 @@ func (s *Service) PushMsg(source defines.SVC_HANDLE, msgType proto.MsgType, sess
 	}
 }
 
-// interval:执行间隔
-// 注意: interval <= 0时, 会自动转化为Spawn调用
-// count: 执行次数, > 0:有限次, == 0:无限次
-func (s *Service) NewTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
-	return s.timerPool.NewTimer(callOut, interval, count)
+func (s *Service) NewGoTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
+	return s.timerPool.NewGoTimer(callOut, interval, count)
 }
 
-func (s *Service) NewSeqTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
+func (s *Service) NewTimer(callOut TimerFunc, interval time.Duration, count int) uint32 {
 	if s.ticker == nil {
-		log.Fatalf("%s new seq timer without ticker", s)
+		return s.timerPool.NewGoTimer(callOut, interval, count)
 	}
-	return s.timerPool.NewSeqTimer(callOut, interval, count)
+	return s.timerPool.NewFrameTimer(callOut, interval, count)
 }
 
 func (s *Service) StopTimer(seq uint32) bool {

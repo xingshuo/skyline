@@ -19,10 +19,19 @@ import (
 type Service interface {
 	GetName() string
 	GetHandle() defines.SVC_HANDLE
-	// golang timer
+	// 功能: 基于time.AfterFunc封装的定时器,保证callOut在Service内以消息通知的方式被执行
+	// 入参:
+	//	   callOut: 回调函数
+	//	   interval: 执行间隔, <= 0时, 会自动转化为Spawn调用
+	// 	   count: 执行次数, > 0:有限次, == 0:无限次
+	// 出参:
+	//	   定时器句柄, 可用于取消(StopTimer)
+	NewGoTimer(callOut core.TimerFunc, interval time.Duration, count int) uint32
+	// 功能: 当Service启动固定频率的跳帧时(NewService传入tickPrecision > 0), 会在每帧OnTick时检测其是否触发(通常会损失一定精度)
+	//	   否则转化为NewGoTimer
+	// 入参/出参:
+	//	   同上
 	NewTimer(callOut core.TimerFunc, interval time.Duration, count int) uint32
-	// service timer
-	NewSeqTimer(callOut core.TimerFunc, interval time.Duration, count int) uint32
 	StopTimer(seq uint32) bool
 	Spawn(f core.SpawnFunc, args ...interface{})
 	PostRequest(args ...interface{})
