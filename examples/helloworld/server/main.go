@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +16,6 @@ import (
 )
 
 type listReceiver struct {
-	gateSvc skyline.Service
 }
 
 func (r *listReceiver) HeaderFormat() (headerLen int64, bigEndian bool) {
@@ -23,30 +23,33 @@ func (r *listReceiver) HeaderFormat() (headerLen int64, bigEndian bool) {
 }
 
 func (r *listReceiver) OnConnected(c netframe.Conn) error {
-	r.gateSvc.PostRequest("NewConn", c)
+	skyline.Send(context.Background(), gateSvcName, "NewConn", c)
 	return nil
 }
 
 func (r *listReceiver) OnMessage(c netframe.Conn, b []byte) {
 	log.Infof("recv msg %v", b)
-	r.gateSvc.PostRequest("ConnMessage", c, b)
+	skyline.Send(context.Background(), gateSvcName, "ConnMessage", c, b)
 }
 
 func (r *listReceiver) OnClosed(c netframe.Conn) error {
-	r.gateSvc.PostRequest("CloseConn", c)
+	skyline.Send(context.Background(), gateSvcName, "CloseConn", c)
 	return nil
 }
 
 var gateAddr = "0.0.0.0:8808"
+var gateSvcName = "gate"
 
 func main() {
-	skyline.Init("config.json")
-	gateSvc, err := skyline.NewService("gate", skeleton.NewModule(&GateModule{}, nil), 0)
-	if err != nil {
-		log.Fatalf("new gate svc failed: %v", err)
-	}
+	skyline.Init("config.json", func(ctx context.Context) error {
+		_, err := skyline.NewService(gateSvcName, skeleton.NewModule(&GateModule{}, nil), 0)
+		if err != nil {
+			log.Fatalf("new gate svc failed: %v", err)
+		}
+		return nil
+	})
 	lis, err := netframe.NewListener(gateAddr, func() netframe.Receiver {
-		return &listReceiver{gateSvc}
+		return &listReceiver{}
 	})
 	if err != nil {
 		log.Fatalf("listen gate port failed: %v", err)

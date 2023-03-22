@@ -10,6 +10,8 @@ import (
 	"github.com/xingshuo/skyline/proto"
 )
 
+const perTickOverload = 1024
+
 type TimerFunc func(ctx context.Context)
 type Timer struct {
 	ID       uint32
@@ -22,15 +24,17 @@ type Timer struct {
 }
 
 type TimerPool struct {
-	service  *Service
-	timers   map[uint32]*Timer
-	seqSlots map[time.Duration]*list.List
+	service       *Service
+	timers        map[uint32]*Timer
+	seqSlots      map[time.Duration]*list.List
+	debtFrameTime int64
 }
 
-func (tp *TimerPool) Init(s *Service) {
+func (tp *TimerPool) Init(s *Service, tickPrecision time.Duration) {
 	tp.service = s
 	tp.timers = make(map[uint32]*Timer)
 	tp.seqSlots = make(map[time.Duration]*list.List)
+	tp.debtFrameTime = int64(tickPrecision) / 2
 }
 
 func (tp *TimerPool) Release() {
@@ -105,8 +109,18 @@ func (tp *TimerPool) StopTimer(id uint32) bool {
 	return false
 }
 
-func (tp *TimerPool) OnTick(ctx context.Context) {
-	now := time.Now().UnixNano()
+func pcall(ctx context.Context, t *Timer) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("Process timer function error, TimerID=%d, Error=%v", t.ID, err)
+		}
+	}()
+
+	t.callOut(ctx)
+}
+
+func (tp *TimerPool) checkFrameTimers(ctx context.Context, now int64) int {
+	execNum := 0
 	for interval, slot := range tp.seqSlots {
 		for {
 			e := slot.Front()
@@ -131,8 +145,23 @@ func (tp *TimerPool) OnTick(ctx context.Context) {
 				t.elapse += int64(t.interval)
 				slot.MoveToBack(e)
 			}
-			t.callOut(ctx)
+			execNum++
+			pcall(ctx, t)
 		}
+	}
+
+	return execNum
+}
+
+func (tp *TimerPool) OnTick(ctx context.Context) {
+	execNum := 0
+	now := time.Now().UnixNano()
+	if tp.debtFrameTime > 0 {
+		execNum = tp.checkFrameTimers(ctx, now-tp.debtFrameTime)
+	}
+	execNum += tp.checkFrameTimers(ctx, now)
+	if execNum >= perTickOverload {
+		log.Warningf("May overload, timer num = %d", execNum)
 	}
 }
 
@@ -154,7 +183,7 @@ func (tp *TimerPool) OnTimeout(ctx context.Context, id uint32) {
 			})
 		}
 		t.callOut(ctx)
-	} else {
-		log.Errorf("unknown timer id %d", id)
+	} else { // maybe stopped
+		log.Debugf("unknown timer id %d", id)
 	}
 }

@@ -57,6 +57,10 @@ func (s *Server) Exit() {
 	log.Info("server exit!")
 }
 
+func (s *Server) GetRpcClient() *cluster.Client {
+	return s.rpcClient
+}
+
 func (s *Server) newSvcHandle() uint64 {
 	s.handleIndex++
 	if s.handleIndex == 0 {

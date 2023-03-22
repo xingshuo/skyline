@@ -45,7 +45,7 @@ func isHandlerMethod(method reflect.Method) bool {
 	if mn == "OnInit" || mn == "OnExit" {
 		return false
 	}
-	// Filter interface
+	// Interceptor interface
 	if mn == "BeforeProcess" || mn == "AfterProcess" {
 		return false
 	}
@@ -99,7 +99,7 @@ func (hp *HandlerPool) Register(ctx context.Context, p Processor) error {
 	return nil
 }
 
-func (hp *HandlerPool) PCall(ctx context.Context, args ...interface{}) (interface{}, error) {
+func (hp *HandlerPool) Process(ctx context.Context, args ...interface{}) (interface{}, error) {
 	mn := args[0].(string)
 	h := hp.handlers[mn]
 	if h == nil {

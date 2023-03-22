@@ -46,15 +46,14 @@ func (s *Service) Init(module interfaces.Module, tickPrecision time.Duration) er
 	s.exitNotify = lib.NewSyncEvent()
 	s.exitDone = lib.NewSyncEvent()
 	s.timerPool = &TimerPool{}
-	s.timerPool.Init(s)
+	s.timerPool.Init(s, tickPrecision)
 	s.asyncPool = &AsyncPool{}
 	s.asyncPool.Init(s)
 	s.module = module
 	if tickPrecision > 0 {
-		if tickPrecision > time.Second {
-			log.Warningf("%s tick precision (%ds) > 1s", s, tickPrecision/time.Second)
-		}
 		s.ticker = time.NewTicker(tickPrecision)
+	} else {
+		log.Warningf("%s init without ticker", s)
 	}
 	return s.module.Init(s.ctx)
 }
@@ -77,6 +76,10 @@ func (s *Service) GetHandle() defines.SVC_HANDLE {
 
 func (s *Service) GetRpcClient() *cluster.Client {
 	return s.server.rpcClient
+}
+
+func (s *Service) GetAsyncPool() *AsyncPool {
+	return s.asyncPool
 }
 
 func (s *Service) NewSession() uint32 {
@@ -116,10 +119,6 @@ func (s *Service) Spawn(f SpawnFunc, args ...interface{}) {
 	s.PushMsg(0, proto.PTYPE_SPAWN, 0, f, args)
 }
 
-func (s *Service) PostRequest(args ...interface{}) {
-	s.PushMsg(0, proto.PTYPE_REQUEST, 0, args...)
-}
-
 // 节点内Service间Notify
 func (s *Service) Send(ctx context.Context, svcName string, args ...interface{}) error {
 	ds := s.server.GetService(svcName)
@@ -146,10 +145,6 @@ func (s *Service) AsyncCall(ctx context.Context, cb AsyncCbFunc, svcName string,
 		return fmt.Errorf("unknown dst svc %s", svcName)
 	}
 	return s.asyncPool.AsyncCall(ctx, ds, args, cb)
-}
-
-func (s *Service) AsyncCallRemote(ctx context.Context, cb AsyncCbFunc, clusterName, svcName string, args ...interface{}) error {
-	return s.asyncPool.AsyncCallRemote(ctx, clusterName, svcName, args, cb)
 }
 
 func (s *Service) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {

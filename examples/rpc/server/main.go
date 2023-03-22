@@ -30,11 +30,13 @@ func (s *RpcServer) Greeting(ctx context.Context, name string) (interface{}, err
 }
 
 func main() {
-	skyline.Init("config.json")
-	_, err := skyline.NewService("greetReceiver", skeleton.NewModule(&RpcServer{"richard"}, nil), 0)
-	if err != nil {
-		log.Fatalf("new gate svc failed: %v", err)
-	}
+	skyline.Init("config.json", func(ctx context.Context) error {
+		_, err := skyline.NewService("greetReceiver", skeleton.NewModule(&RpcServer{"richard"}, nil), 0)
+		if err != nil {
+			log.Fatalf("new gate svc failed: %v", err)
+		}
+		return nil
+	})
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT)

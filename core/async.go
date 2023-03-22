@@ -17,7 +17,7 @@ import (
 )
 
 type GoReqFunc func() (interface{}, error)
-type AsyncCbFunc func(ctx context.Context, peerName interface{}, err error)
+type AsyncCbFunc func(ctx context.Context, reply interface{}, err error)
 
 type AsyncPool struct {
 	service     *Service
@@ -40,7 +40,7 @@ func (ap *AsyncPool) AsyncCall(ctx context.Context, dstSvc *Service, reqArgs []i
 	return nil
 }
 
-func (ap *AsyncPool) AsyncCallRemote(ctx context.Context, clusterName, svcName string, reqArgs []interface{}, cb AsyncCbFunc) error {
+func (ap *AsyncPool) AsyncCallRemote(clusterName, svcName string, reqArgs []interface{}, cb AsyncCbFunc, timeout time.Duration) error {
 	localCluster := config.ServerConf.ClusterName
 	seq := ap.service.NewSession()
 	request := seri.SeriPack(reqArgs...)
@@ -53,10 +53,6 @@ func (ap *AsyncPool) AsyncCallRemote(ctx context.Context, clusterName, svcName s
 		return err
 	}
 	var timerSeq uint32
-	timeout, _ := ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
-	if timeout <= 0 {
-		timeout = defines.DefaultSSRpcTimeout
-	}
 	timerSeq = ap.service.NewTimer(func(ctx context.Context) {
 		ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
 	}, timeout, 1)
@@ -69,9 +65,14 @@ func (ap *AsyncPool) AsyncCallRemote(ctx context.Context, clusterName, svcName s
 
 func (ap *AsyncPool) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
 	var seq uint32
+	var timeout time.Duration
 	if cb != nil {
 		seq = ap.service.NewSession()
 		ap.cbFuncs[seq] = cb
+		timeout, _ = ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
+		if timeout <= 0 {
+			timeout = defines.DefaultSSRpcTimeout
+		}
 	}
 	go func() {
 		defer func() {
@@ -85,17 +86,13 @@ func (ap *AsyncPool) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
 			f()
 			return
 		}
-
-		var timerSeq uint32
-		timeout, _ := ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
-		if timeout <= 0 {
-			timeout = defines.DefaultSSRpcTimeout
-		}
-		timerSeq = ap.service.NewTimer(func(ctx context.Context) {
-			ap.OnAsyncCb(ctx, seq, nil, defines.ErrRpcTimeout)
-		}, timeout, 1)
+		time.AfterFunc(timeout, func() {
+			ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, seq, &proto.RpcResponse{
+				Reply: nil,
+				Err:   defines.ErrRpcTimeout,
+			})
+		})
 		rsp, err := f()
-		ap.service.StopTimer(timerSeq)
 		ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, seq, &proto.RpcResponse{
 			Reply: rsp,
 			Err:   err,
@@ -104,20 +101,27 @@ func (ap *AsyncPool) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
 }
 
 type LinearPair struct {
-	f     GoReqFunc
-	cbSeq uint32
+	f       GoReqFunc
+	cbSeq   uint32
+	timeout time.Duration
 }
 
 func (ap *AsyncPool) LinearGo(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
 	var seq uint32
+	var timeout time.Duration
 	if cb != nil {
 		seq = ap.service.NewSession()
 		ap.cbFuncs[seq] = cb
+		timeout, _ = ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
+		if timeout <= 0 {
+			timeout = defines.DefaultSSRpcTimeout
+		}
 	}
 	ap.linearMutex.Lock()
 	ap.linearQueue.Enqueue(&LinearPair{
-		f:     f,
-		cbSeq: seq,
+		f:       f,
+		cbSeq:   seq,
+		timeout: timeout,
 	})
 	ap.linearMutex.Unlock()
 	go func() {
@@ -138,16 +142,13 @@ func (ap *AsyncPool) LinearGo(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) 
 			return
 		}
 
-		var timerSeq uint32
-		timeout, _ := ctx.Value(defines.CtxKeyRpcTimeout).(time.Duration)
-		if timeout <= 0 {
-			timeout = defines.DefaultSSRpcTimeout
-		}
-		timerSeq = ap.service.NewTimer(func(ctx context.Context) {
-			ap.OnAsyncCb(ctx, pair.cbSeq, nil, defines.ErrRpcTimeout)
-		}, timeout, 1)
+		time.AfterFunc(pair.timeout, func() {
+			ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, pair.cbSeq, &proto.RpcResponse{
+				Reply: nil,
+				Err:   defines.ErrRpcTimeout,
+			})
+		})
 		rsp, err := pair.f()
-		ap.service.StopTimer(timerSeq)
 		ap.service.PushMsg(0, proto.PTYPE_ASYNC_CB, pair.cbSeq, &proto.RpcResponse{
 			Reply: rsp,
 			Err:   err,
