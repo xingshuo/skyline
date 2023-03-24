@@ -1,7 +1,10 @@
-package proto
+package codec
 
 import (
 	"encoding/binary"
+	"errors"
+
+	"github.com/xingshuo/skyline/seri"
 
 	s2sproto "github.com/xingshuo/skyline/proto/generate"
 
@@ -18,16 +21,6 @@ func FillSSHeader(b []byte) []byte {
 	binary.BigEndian.PutUint32(data, uint32(bodyLen))
 	copy(data[SSHeadLen:], b)
 	return data
-}
-
-func PackSSMsg(msg *s2sproto.SSMsg) ([]byte, error) { //推荐使用
-	b, err := proto.Marshal(msg)
-	if err != nil {
-		log.Errorf("pb marshal err:%v.\n", err)
-		return nil, err
-	}
-	data := FillSSHeader(b)
-	return data, nil
 }
 
 func PackClusterRequest(srcCluster, srcSvc, dstSvc string, session uint32, request []byte) ([]byte, error) {
@@ -75,4 +68,27 @@ func PackClusterResponse(srcCluster, srcSvc, dstSvc string, session uint32, resp
 	}
 	data := FillSSHeader(b)
 	return data, nil
+}
+
+type LuaSeri struct {
+}
+
+func (ls *LuaSeri) EncodeRequest(args ...interface{}) ([]byte, error) {
+	return seri.SeriPack(args...), nil
+}
+
+func (ls *LuaSeri) DecodeRequest(data []byte) ([]interface{}, error) {
+	return seri.SeriUnpack(data), nil
+}
+
+func (ls *LuaSeri) EncodeResponse(reply interface{}) ([]byte, error) {
+	return seri.SeriPack(reply), nil
+}
+
+func (ls *LuaSeri) DecodeResponse(data []byte) (interface{}, error) {
+	l := seri.SeriUnpack(data)
+	if len(l) != 1 {
+		return nil, errors.New("lua seri decode len err")
+	}
+	return l[0], nil
 }

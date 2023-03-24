@@ -17,3 +17,11 @@ type Module interface {
 	RemoteProcess(ctx context.Context, args ...interface{}) (interface{}, error)
 	Exit()
 }
+
+type Codec interface {
+	EncodeRequest(args ...interface{}) ([]byte, error)
+	DecodeRequest(data []byte) ([]interface{}, error)
+
+	EncodeResponse(reply interface{}) ([]byte, error)
+	DecodeResponse(data []byte) (interface{}, error)
+}

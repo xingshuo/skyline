@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xingshuo/skyline/cluster/codec"
+
 	"github.com/xingshuo/skyline/interfaces"
 
 	"github.com/xingshuo/skyline/cluster"
-
-	"github.com/xingshuo/skyline/seri"
 
 	"github.com/xingshuo/skyline/config"
 
@@ -78,6 +78,10 @@ func (s *Service) GetRpcClient() *cluster.Client {
 	return s.server.rpcClient
 }
 
+func (s *Service) GetRpcCodec() interfaces.Codec {
+	return s.server.rpcCodec
+}
+
 func (s *Service) GetAsyncPool() *AsyncPool {
 	return s.asyncPool
 }
@@ -117,34 +121,6 @@ func (s *Service) StopTimer(seq uint32) bool {
 
 func (s *Service) Spawn(f SpawnFunc, args ...interface{}) {
 	s.PushMsg(0, proto.PTYPE_SPAWN, 0, f, args)
-}
-
-// 节点内Service间Notify
-func (s *Service) Send(ctx context.Context, svcName string, args ...interface{}) error {
-	ds := s.server.GetService(svcName)
-	if ds == nil {
-		return fmt.Errorf("unknown dst svc %s", svcName)
-	}
-	ds.PushMsg(s.handle, proto.PTYPE_REQUEST, 0, args...)
-	return nil
-}
-
-func (s *Service) SendRemote(ctx context.Context, clusterName, svcName string, args ...interface{}) error {
-	localCluster := config.ServerConf.ClusterName
-	request := seri.SeriPack(args...)
-	data, err := proto.PackClusterRequest(localCluster, s.name, svcName, 0, request)
-	if err != nil {
-		return err
-	}
-	return s.server.rpcClient.Send(clusterName, data)
-}
-
-func (s *Service) AsyncCall(ctx context.Context, cb AsyncCbFunc, svcName string, args ...interface{}) error {
-	ds := s.server.GetService(svcName)
-	if ds == nil {
-		return fmt.Errorf("unknown dst svc %s", svcName)
-	}
-	return s.asyncPool.AsyncCall(ctx, ds, args, cb)
 }
 
 func (s *Service) Go(ctx context.Context, f GoReqFunc, cb AsyncCbFunc) {
@@ -240,7 +216,12 @@ func (s *Service) dispatchMsg(source defines.SVC_HANDLE, msgType proto.MsgType, 
 		req := msg[0].(*proto.ClusterRequest)
 		ctx := context.WithValue(s.ctx, defines.CtxKeySrcCluster, req.SrcCluster)
 		ctx = context.WithValue(ctx, defines.CtxKeySrcSvcName, req.SrcService)
-		reply, err := s.module.RemoteProcess(ctx, seri.SeriUnpack(req.Request)...)
+		reqArgs, decErr := s.GetRpcCodec().DecodeRequest(req.Request)
+		if decErr != nil {
+			log.Errorf("decode cluster request err:%v", decErr)
+			return
+		}
+		reply, err := s.module.RemoteProcess(ctx, reqArgs...)
 		if session != 0 {
 			var errMsg string
 			if err == nil {
@@ -249,20 +230,28 @@ func (s *Service) dispatchMsg(source defines.SVC_HANDLE, msgType proto.MsgType, 
 				errMsg = err.Error()
 			}
 			localCluster := config.ServerConf.ClusterName
-			response := seri.SeriPack(reply)
-			data, packErr := proto.PackClusterResponse(localCluster, s.name, req.SrcService, session, response, errMsg)
-			if packErr == nil {
-				sendErr := s.server.rpcClient.Send(req.SrcCluster, data)
-				if sendErr != nil {
-					log.Errorf("send cluster response err: %v", sendErr)
-				}
-			} else {
+			response, encErr := s.GetRpcCodec().EncodeResponse(reply)
+			if encErr != nil {
+				log.Errorf("encode cluster response err:%v", encErr)
+				return
+			}
+			data, packErr := codec.PackClusterResponse(localCluster, s.name, req.SrcService, session, response, errMsg)
+			if packErr != nil {
 				log.Errorf("pack cluster response err: %v", packErr)
+				return
+			}
+			sendErr := s.server.rpcClient.Send(req.SrcCluster, data)
+			if sendErr != nil {
+				log.Errorf("send cluster response err: %v", sendErr)
 			}
 		}
 	case proto.PTYPE_CLUSTER_RSP:
 		rsp := msg[0].(*proto.ClusterResponse)
-		reply := seri.SeriUnpack(rsp.Response)[0]
+		reply, decErr := s.GetRpcCodec().DecodeResponse(rsp.Response)
+		if decErr != nil {
+			log.Errorf("decode cluster response err:%v", decErr)
+			return
+		}
 		var err error
 		if rsp.ErrMsg == defines.ErrOK.Error() {
 			err = nil

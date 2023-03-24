@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xingshuo/skyline/cluster/codec"
+
 	"github.com/xingshuo/skyline/interfaces"
 
 	"github.com/xingshuo/skyline/proto"
@@ -23,6 +25,7 @@ type Server struct {
 	handleIndex    uint64
 	rpcClient      *cluster.Client
 	rpcServer      *cluster.Server
+	rpcCodec       interfaces.Codec
 }
 
 func (s *Server) Init() error {
@@ -38,6 +41,7 @@ func (s *Server) Init() error {
 	if err != nil {
 		return err
 	}
+	s.rpcCodec = &codec.LuaSeri{}
 	return nil
 }
 
@@ -59,6 +63,10 @@ func (s *Server) Exit() {
 
 func (s *Server) GetRpcClient() *cluster.Client {
 	return s.rpcClient
+}
+
+func (s *Server) GetRpcCodec() interfaces.Codec {
+	return s.rpcCodec
 }
 
 func (s *Server) newSvcHandle() uint64 {

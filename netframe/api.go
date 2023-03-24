@@ -1,8 +1,9 @@
 package netframe
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/xingshuo/skyline/log"
 
 	"github.com/xingshuo/skyline/lib"
 )
@@ -30,7 +31,7 @@ func NewDialer(address string, newReceiver func() Receiver, opts ...DialOption) 
 func NewListener(address string, newReceiver func() Receiver) (*Listener, error) {
 	// Listener一定会处理收包事件, 必须设置收包处理器
 	if newReceiver == nil {
-		return nil, fmt.Errorf("newReceiver func nil")
+		log.Fatal("newReceiver func nil")
 	}
 	l := &Listener{
 		conns:       make(map[*TCPConn]bool),

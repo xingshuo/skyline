@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xingshuo/skyline/seri"
+	"github.com/xingshuo/skyline/cluster/codec"
 
 	"github.com/xingshuo/skyline/defines"
 	"github.com/xingshuo/skyline/proto"
@@ -43,8 +43,11 @@ func (ap *AsyncPool) AsyncCall(ctx context.Context, dstSvc *Service, reqArgs []i
 func (ap *AsyncPool) AsyncCallRemote(clusterName, svcName string, reqArgs []interface{}, cb AsyncCbFunc, timeout time.Duration) error {
 	localCluster := config.ServerConf.ClusterName
 	seq := ap.service.NewSession()
-	request := seri.SeriPack(reqArgs...)
-	data, err := proto.PackClusterRequest(localCluster, ap.service.GetName(), svcName, seq, request)
+	request, encErr := ap.service.GetRpcCodec().EncodeRequest(reqArgs...)
+	if encErr != nil {
+		return encErr
+	}
+	data, err := codec.PackClusterRequest(localCluster, ap.service.GetName(), svcName, seq, request)
 	if err != nil {
 		return err
 	}

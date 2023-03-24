@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/xingshuo/skyline/seri"
+	"github.com/xingshuo/skyline/cluster/codec"
 
 	"github.com/xingshuo/skyline/proto"
 
@@ -25,11 +25,6 @@ type Service interface {
 	GetName() string
 	GetHandle() defines.SVC_HANDLE
 	Spawn(f core.SpawnFunc, args ...interface{})
-	Send(ctx context.Context, svcName string, args ...interface{}) error
-	SendRemote(ctx context.Context, clusterName, svcName string, args ...interface{}) error
-	AsyncCall(ctx context.Context, cb core.AsyncCbFunc, svcName string, args ...interface{}) error
-	Go(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc)
-	LinearGo(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc)
 }
 
 var app *core.Server
@@ -88,7 +83,7 @@ func DelService(svcName string) {
 }
 
 func RunningService(ctx context.Context) Service {
-	svc, _ := ctx.Value(defines.CtxKeyService).(Service)
+	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	return svc
 }
 
@@ -128,7 +123,16 @@ func StopTimer(ctx context.Context, seq uint32) bool {
 }
 
 // goroutine safe
-func Spawn(svcName string, f core.SpawnFunc, args ...interface{}) error {
+func Spawn(ctx context.Context, f core.SpawnFunc, args ...interface{}) {
+	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
+	if svc == nil {
+		log.Fatal("run Spawn in unsafe goroutine")
+	}
+	svc.Spawn(f, args...)
+}
+
+// goroutine safe
+func SpawnTo(svcName string, f core.SpawnFunc, args ...interface{}) error {
 	ds := app.GetService(svcName)
 	if ds == nil {
 		return fmt.Errorf("unknown dst svc %s", svcName)
@@ -144,7 +148,7 @@ func Send(ctx context.Context, svcName string, args ...interface{}) error {
 		return fmt.Errorf("unknown dst svc %s", svcName)
 	}
 	source := defines.SVC_HANDLE(0)
-	srcSvc, _ := ctx.Value(defines.CtxKeyService).(Service)
+	srcSvc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if srcSvc != nil {
 		source = srcSvc.GetHandle()
 	}
@@ -155,13 +159,16 @@ func Send(ctx context.Context, svcName string, args ...interface{}) error {
 // goroutine safe
 func SendRemote(ctx context.Context, clusterName, svcName string, args ...interface{}) error {
 	localCluster := config.ServerConf.ClusterName
-	request := seri.SeriPack(args...)
+	request, encErr := app.GetRpcCodec().EncodeRequest(args...)
+	if encErr != nil {
+		return encErr
+	}
 	localSvc := ""
-	srcSvc, _ := ctx.Value(defines.CtxKeyService).(Service)
+	srcSvc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if srcSvc != nil {
 		localSvc = srcSvc.GetName()
 	}
-	data, err := proto.PackClusterRequest(localCluster, localSvc, svcName, 0, request)
+	data, err := codec.PackClusterRequest(localCluster, localSvc, svcName, 0, request)
 	if err != nil {
 		return err
 	}
@@ -200,7 +207,7 @@ func Go(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc) {
 	if svc == nil {
 		log.Fatal("run Go in unsafe goroutine")
 	}
-	svc.GetAsyncPool().Go(ctx, f, cb)
+	svc.Go(ctx, f, cb)
 }
 
 func LinearGo(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc) {
@@ -208,5 +215,5 @@ func LinearGo(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc) {
 	if svc == nil {
 		log.Fatal("run LinearGo in unsafe goroutine")
 	}
-	svc.GetAsyncPool().LinearGo(ctx, f, cb)
+	svc.LinearGo(ctx, f, cb)
 }

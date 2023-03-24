@@ -11,11 +11,6 @@ enum SSCmd {
   RSP_CLUSTER_RESPONSE    = 10001;
 }
 
-enum SSError {
-  OK = 0;
-  ERR_RPC_TIMEOUT = -10001;
-}
-
 message ReqClusterRequest {
   string SrcCluster = 1;
   string SrcService = 2;
