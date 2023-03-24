@@ -70,18 +70,22 @@ func Exit() {
 	}
 }
 
+// goroutine safe
 func NewService(svcName string, module interfaces.Module, tickPrecision time.Duration) (Service, error) {
 	return app.NewService(svcName, module, tickPrecision)
 }
 
+// goroutine safe
 func GetService(svcName string) Service {
 	return app.GetService(svcName)
 }
 
+// goroutine safe
 func DelService(svcName string) {
 	app.DelService(svcName)
 }
 
+// goroutine safe
 func RunningService(ctx context.Context) Service {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	return svc

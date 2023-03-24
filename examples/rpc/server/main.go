@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/xingshuo/skyline/seri"
+
 	"github.com/xingshuo/skyline/skeleton"
 
 	"github.com/xingshuo/skyline"
@@ -26,7 +28,13 @@ func (s *RpcServer) OnExit() {
 
 func (s *RpcServer) Greeting(ctx context.Context, name string) (interface{}, error) {
 	log.Infof("recv greeting from %s", name)
-	return s.name, nil
+	reply := &seri.Table{
+		Hashmap: map[interface{}]interface{}{
+			"name":    s.name,
+			"message": "nice to meet you too!",
+		},
+	}
+	return reply, nil
 }
 
 func main() {
