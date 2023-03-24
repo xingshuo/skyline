@@ -29,6 +29,7 @@ type Service interface {
 
 var app *core.Server
 
+// 框架初始化接口
 func Init(confPath string, startFunc func(ctx context.Context) error) {
 	if app != nil {
 		log.Fatalln("app already init")
@@ -64,28 +65,29 @@ func Init(confPath string, startFunc func(ctx context.Context) error) {
 	slog.Info("Init done")
 }
 
+// 框架退出接口
 func Exit() {
 	if app != nil {
 		app.Exit()
 	}
 }
 
-// goroutine safe
+// 创建Service接口(goroutine safe)
 func NewService(svcName string, module interfaces.Module, tickPrecision time.Duration) (Service, error) {
 	return app.NewService(svcName, module, tickPrecision)
 }
 
-// goroutine safe
+// 获取Service实例接口(goroutine safe)
 func GetService(svcName string) Service {
 	return app.GetService(svcName)
 }
 
-// goroutine safe
+// 销毁Service接口(goroutine safe)
 func DelService(svcName string) {
 	app.DelService(svcName)
 }
 
-// goroutine safe
+// 获取当前运行的service(goroutine safe)
 func RunningService(ctx context.Context) Service {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	return svc
@@ -118,6 +120,7 @@ func NewTimer(ctx context.Context, callOut core.TimerFunc, interval time.Duratio
 	return svc.NewTimer(callOut, interval, count)
 }
 
+// 移除定时器
 func StopTimer(ctx context.Context, seq uint32) bool {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
@@ -126,7 +129,7 @@ func StopTimer(ctx context.Context, seq uint32) bool {
 	return svc.StopTimer(seq)
 }
 
-// goroutine safe
+// 将f和args以一条消息的形式Push到当前Service消息队列中,等待被执行(goroutine safe)
 func Spawn(ctx context.Context, f core.SpawnFunc, args ...interface{}) {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
@@ -135,7 +138,7 @@ func Spawn(ctx context.Context, f core.SpawnFunc, args ...interface{}) {
 	svc.Spawn(f, args...)
 }
 
-// goroutine safe
+// 将f和args以一条消息的形式Push到目标Service消息队列中,等待被执行(goroutine safe)
 func SpawnTo(svcName string, f core.SpawnFunc, args ...interface{}) error {
 	ds := app.GetService(svcName)
 	if ds == nil {
@@ -145,7 +148,7 @@ func SpawnTo(svcName string, f core.SpawnFunc, args ...interface{}) error {
 	return nil
 }
 
-// goroutine safe
+// Service间投递消息接口(goroutine safe)
 func Send(ctx context.Context, svcName string, args ...interface{}) error {
 	ds := app.GetService(svcName)
 	if ds == nil {
@@ -160,7 +163,7 @@ func Send(ctx context.Context, svcName string, args ...interface{}) error {
 	return nil
 }
 
-// goroutine safe
+// Cluster间投递消息接口(goroutine safe)
 func SendRemote(ctx context.Context, clusterName, svcName string, args ...interface{}) error {
 	localCluster := config.ServerConf.ClusterName
 	request, encErr := app.GetRpcCodec().EncodeRequest(args...)
@@ -179,6 +182,7 @@ func SendRemote(ctx context.Context, clusterName, svcName string, args ...interf
 	return app.GetRpcClient().Send(clusterName, data)
 }
 
+// Service间异步rpc接口, 目前没有超时处理
 func AsyncCall(ctx context.Context, cb core.AsyncCbFunc, svcName string, args ...interface{}) error {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
@@ -191,6 +195,7 @@ func AsyncCall(ctx context.Context, cb core.AsyncCbFunc, svcName string, args ..
 	return svc.GetAsyncPool().AsyncCall(ctx, ds, args, cb)
 }
 
+// Cluster间异步rpc接口, 可以通过context.WithValue(ctx, defines.CtxKeyRpcTimeout, xxxx)指定rpc超时时长(默认6s)
 func AsyncCallRemote(ctx context.Context, cb core.AsyncCbFunc, clusterName, svcName string, args ...interface{}) error {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
@@ -206,6 +211,7 @@ func AsyncCallRemote(ctx context.Context, cb core.AsyncCbFunc, clusterName, svcN
 	return svc.GetAsyncPool().AsyncCallRemote(clusterName, svcName, args, cb, timeout)
 }
 
+// 基于Service的异步并发接口: 通过单独的goroutine执行f, 执行完成后以服务消息的方式通知并执行cb
 func Go(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc) {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
@@ -214,6 +220,7 @@ func Go(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc) {
 	svc.Go(ctx, f, cb)
 }
 
+// 基于Service的异步线性并发接口: 通过单独的goroutine执行f,且所有处理f的goroutine按队列序执行. 当某个f执行完成后,立即以服务消息的方式通知其对应cb执行
 func LinearGo(ctx context.Context, f core.GoReqFunc, cb core.AsyncCbFunc) {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
