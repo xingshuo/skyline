@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"github.com/xingshuo/skyline/cluster/codec"
@@ -34,7 +34,7 @@ func Init(confPath string, startFunc func(ctx context.Context) error) {
 	if app != nil {
 		log.Fatalln("app already init")
 	}
-	data, err := ioutil.ReadFile(confPath)
+	data, err := os.ReadFile(confPath)
 	if err != nil {
 		log.Fatalf("read config [%s] failed:%v\n", confPath, err)
 	}
@@ -95,11 +95,14 @@ func RunningService(ctx context.Context) Service {
 
 // 功能: 基于time.AfterFunc封装的定时器,保证callOut在Service内以消息通知的方式被执行
 // 入参:
-//	   callOut: 回调函数
-//	   interval: 执行间隔, <= 0时, 会自动转化为Spawn调用
-// 	   count: 执行次数, > 0:有限次, == 0:无限次
+//
+//	callOut: 回调函数
+//	interval: 执行间隔, <= 0时, 会自动转化为Spawn调用
+//	count: 执行次数, > 0:有限次, == 0:无限次
+//
 // 出参:
-//	   定时器句柄, 可用于取消(StopTimer)
+//
+//	定时器句柄, 可用于取消(StopTimer)
 func NewGoTimer(ctx context.Context, callOut core.TimerFunc, interval time.Duration, count int) uint32 {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {
@@ -109,9 +112,12 @@ func NewGoTimer(ctx context.Context, callOut core.TimerFunc, interval time.Durat
 }
 
 // 功能: 当Service启动固定频率的跳帧时(NewService传入tickPrecision > 0), 会在每帧OnTick时检测其是否触发(通常会损失一定精度)
-//	   否则转化为NewGoTimer
+//
+//	否则转化为NewGoTimer
+//
 // 入参/出参:
-//	   同上
+//
+//	同上
 func NewTimer(ctx context.Context, callOut core.TimerFunc, interval time.Duration, count int) uint32 {
 	svc, _ := ctx.Value(defines.CtxKeyService).(*core.Service)
 	if svc == nil {

@@ -3,7 +3,7 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sync"
 
 	"github.com/xingshuo/skyline/config"
@@ -25,7 +25,7 @@ func (c *Client) Init() error {
 
 func (c *Client) Reload() error {
 	confPath := config.ServerConf.MeshConfig
-	data, err := ioutil.ReadFile(confPath)
+	data, err := os.ReadFile(confPath)
 	if err != nil {
 		log.Errorf("read cluster config [%s] failed:%v.\n", confPath, err)
 		return err

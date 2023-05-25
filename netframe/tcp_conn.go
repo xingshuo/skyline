@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"sync"
 
@@ -36,8 +35,8 @@ func (tc *TCPConn) Init(conn net.Conn, r Receiver) error {
 	return r.OnConnected(tc)
 }
 
-func (tc *TCPConn) getNextMessage(headerLen int64, bigEndian bool) (b []byte, err error) {
-	header, err := ioutil.ReadAll(io.LimitReader(tc.rawConn, headerLen))
+func (tc *TCPConn) getNextMessage(headerLen int64, bigEndian bool) ([]byte, error) {
+	header, err := io.ReadAll(io.LimitReader(tc.rawConn, headerLen))
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +61,7 @@ func (tc *TCPConn) getNextMessage(headerLen int64, bigEndian bool) (b []byte, er
 		msgSize = int64(byteOrder.Uint16(header))
 	}
 
-	msgData, err := ioutil.ReadAll(io.LimitReader(tc.rawConn, msgSize))
+	msgData, err := io.ReadAll(io.LimitReader(tc.rawConn, msgSize))
 	if err != nil {
 		return nil, err
 	}

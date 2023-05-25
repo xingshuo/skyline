@@ -9,4 +9,5 @@ var (
 	ErrRpcTimeout      = errors.New("RpcTimeout")
 	ErrTransportClosed = errors.New("TransportClosed")
 	ErrSvcNoExist      = errors.New("ServiceNoExist")
+	ErrAddrListenAgain = errors.New("AddrListenAgain")
 )
