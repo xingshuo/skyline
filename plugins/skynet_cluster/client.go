@@ -16,12 +16,12 @@ const (
 	MULTI_PART = 0x8000
 )
 
-type ClusterSender struct {
+type clusterSender struct {
 	netframe.Dialer
 	session uint32
 }
 
-func (cs *ClusterSender) packPushRequest(address string, protoType int, msg []byte) (buf []byte, padding [][]byte) {
+func (cs *clusterSender) packPushRequest(address string, protoType int, msg []byte) (buf []byte, padding [][]byte) {
 	sz := len(msg)
 	nameLen := len(address)
 	if sz < MULTI_PART {
@@ -72,20 +72,20 @@ func (cs *ClusterSender) packPushRequest(address string, protoType int, msg []by
 	}
 }
 
-type Client struct {
+type skynetClient struct {
 	confPath     string
 	clusterAddrs map[string]string         // clustername: address
-	senders      map[string]*ClusterSender // clustername: sender
+	senders      map[string]*clusterSender // clustername: sender
 	rwMutex      sync.RWMutex
 }
 
-func (c *Client) Init(confPath string) error {
+func (c *skynetClient) Init(confPath string) error {
 	c.confPath = confPath
-	c.senders = make(map[string]*ClusterSender)
+	c.senders = make(map[string]*clusterSender)
 	return c.Reload()
 }
 
-func (c *Client) Reload() error {
+func (c *skynetClient) Reload() error {
 	data, err := os.ReadFile(c.confPath)
 	if err != nil {
 		log.Errorf("read cluster config [%s] failed:%v.\n", c.confPath, err)
@@ -113,7 +113,7 @@ func (c *Client) Reload() error {
 	return nil
 }
 
-func (c *Client) GetSender(clusterName string) (*ClusterSender, error) {
+func (c *skynetClient) GetSender(clusterName string) (*clusterSender, error) {
 	addr, ok := c.clusterAddrs[clusterName]
 	if !ok {
 		return nil, fmt.Errorf("no such cluster %s", clusterName)
@@ -130,7 +130,7 @@ func (c *Client) GetSender(clusterName string) (*ClusterSender, error) {
 		if err != nil {
 			return nil, err
 		}
-		s = &ClusterSender{
+		s = &clusterSender{
 			Dialer:  *d,
 			session: 1,
 		}
@@ -139,7 +139,7 @@ func (c *Client) GetSender(clusterName string) (*ClusterSender, error) {
 	return s, nil
 }
 
-func (c *Client) Send(clusterName, svcName string, protoType int, args ...interface{}) error {
+func (c *skynetClient) Send(clusterName, svcName string, protoType int, args ...interface{}) error {
 	s, err := c.GetSender(clusterName)
 	if err != nil {
 		return err
@@ -158,11 +158,11 @@ func (c *Client) Send(clusterName, svcName string, protoType int, args ...interf
 	return nil
 }
 
-func (c *Client) Exit() {
+func (c *skynetClient) Exit() {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 	for _, s := range c.senders {
 		go s.Shutdown()
 	}
-	c.senders = make(map[string]*ClusterSender)
+	c.senders = make(map[string]*clusterSender)
 }

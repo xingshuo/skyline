@@ -1,0 +1,4 @@
+{
+  "skynet_plugin_server": "127.0.0.1:7011",
+  "skynet_server": "127.0.0.1:8011"
+}

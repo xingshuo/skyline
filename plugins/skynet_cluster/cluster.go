@@ -6,23 +6,23 @@ import (
 )
 
 var (
-	client *Client
-	server *Server
+	client *skynetClient
+	server *skynetServer
 )
 
 func Init(confPath string) {
 	if client != nil || server != nil {
-		log.Fatal("skynet plugin already init")
+		log.Fatal("skynet-cluster plugin already init")
 	}
-	client = &Client{}
+	client = &skynetClient{}
 	err := client.Init(confPath)
 	if err != nil {
-		log.Fatalf("skynet plugin init failed:%v", err)
+		log.Fatalf("skynet-cluster plugin init failed:%v", err)
 	}
-	server = &Server{
+	server = &skynetServer{
 		gates: make(map[string]*netframe.Listener),
 	}
-	log.Info("skynet plugin init done")
+	log.Info("skynet-cluster plugin init done")
 }
 
 func Exit() {
@@ -32,6 +32,7 @@ func Exit() {
 	if server != nil {
 		server.Exit()
 	}
+	log.Info("skynet-cluster plugin exit")
 }
 
 // equal to `cluster.open`

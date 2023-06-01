@@ -1,0 +1,7 @@
+{
+  "ClusterName": "skynet_plugin_server",
+  "IsRecoverModel": false,
+  "LogFilename": "",
+  "LogLevel": 0,
+  "MeshConfig": "clustername.json"
+}

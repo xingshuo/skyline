@@ -11,7 +11,7 @@ import (
 	"github.com/xingshuo/skyline/utils"
 )
 
-type ClusterRequest struct {
+type clusterRequest struct {
 	Address   string
 	ProtoType int
 	Msg       []byte
@@ -19,14 +19,14 @@ type ClusterRequest struct {
 
 type clusterReqPadding struct {
 	msgSz int
-	req   *ClusterRequest
+	req   *clusterRequest
 }
 
-type ClusterAgent struct {
+type clusterAgent struct {
 	largeRequests map[uint32]*clusterReqPadding
 }
 
-func (a *ClusterAgent) unpackPushRequest(buf []byte) *ClusterRequest {
+func (a *clusterAgent) unpackPushRequest(buf []byte) *clusterRequest {
 	sz := len(buf)
 	if sz < 2 {
 		log.Errorf("Invalid cluster message (size=%d)", sz)
@@ -43,7 +43,7 @@ func (a *ClusterAgent) unpackPushRequest(buf []byte) *ClusterRequest {
 		session := binary.LittleEndian.Uint32(buf[2+nameSz:])
 		utils.Assert(session == 0, "Invalid req package. session != 0")
 		protoType := int(buf[2+nameSz+4])
-		clusReq := &ClusterRequest{
+		clusReq := &clusterRequest{
 			Address:   address,
 			ProtoType: protoType,
 			Msg:       buf[nameSz+7:],
@@ -60,7 +60,7 @@ func (a *ClusterAgent) unpackPushRequest(buf []byte) *ClusterRequest {
 		protoType := int(buf[2+nameSz+4])
 		msgSz := binary.LittleEndian.Uint32(buf[nameSz+7:])
 		utils.Assert(a.largeRequests[session] == nil, "Invalid large req package. session padding not nil")
-		clusReq := &ClusterRequest{
+		clusReq := &clusterRequest{
 			Address:   address,
 			ProtoType: protoType,
 			Msg:       make([]byte, 0),
@@ -93,30 +93,30 @@ func (a *ClusterAgent) unpackPushRequest(buf []byte) *ClusterRequest {
 	return nil
 }
 
-func (a *ClusterAgent) HeaderFormat() (headerLen int64, bigEndian bool) {
+func (a *clusterAgent) HeaderFormat() (headerLen int64, bigEndian bool) {
 	return 2, true
 }
 
-func (a *ClusterAgent) OnConnected(c netframe.Conn) error {
+func (a *clusterAgent) OnConnected(c netframe.Conn) error {
 	return nil
 }
 
-func (a *ClusterAgent) OnMessage(c netframe.Conn, data []byte) {
+func (a *clusterAgent) OnMessage(c netframe.Conn, data []byte) {
 	req := a.unpackPushRequest(data)
 	if req != nil {
 		skyline.Send(context.Background(), req.Address, seri.SeriUnpack(req.Msg)...)
 	}
 }
 
-func (a *ClusterAgent) OnClosed(s netframe.Conn) error {
+func (a *clusterAgent) OnClosed(s netframe.Conn) error {
 	return nil
 }
 
-type Server struct {
+type skynetServer struct {
 	gates map[string]*netframe.Listener
 }
 
-func (s *Server) Listen(cluster string) error {
+func (s *skynetServer) Listen(cluster string) error {
 	lisAddr := client.clusterAddrs[cluster]
 	if lisAddr == "" {
 		log.Fatalf("skynet cluster no config: %s", cluster)
@@ -126,7 +126,7 @@ func (s *Server) Listen(cluster string) error {
 		return defines.ErrAddrListenAgain
 	}
 	l, err := netframe.NewListener(lisAddr, func() netframe.Receiver {
-		return &ClusterAgent{
+		return &clusterAgent{
 			largeRequests: make(map[uint32]*clusterReqPadding),
 		}
 	})
@@ -146,7 +146,7 @@ func (s *Server) Listen(cluster string) error {
 	return nil
 }
 
-func (s *Server) Exit() {
+func (s *skynetServer) Exit() {
 	for _, lis := range s.gates {
 		lis.GracefulStop()
 	}
