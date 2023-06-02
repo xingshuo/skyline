@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/xingshuo/skyline"
 	"github.com/xingshuo/skyline/log"
 	"github.com/xingshuo/skyline/plugins/skynet_cluster"
 	"github.com/xingshuo/skyline/seri"
 	"github.com/xingshuo/skyline/skeleton"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 const (
@@ -42,6 +43,12 @@ func (ra *RouterAgent) Request(ctx context.Context, peerName string) (interface{
 		},
 	}
 	skynet_cluster.Send(peerName, ".routersender", luaType, "Response", ts, m)
+	return nil, nil
+}
+
+func (ra *RouterAgent) MultiRequest(ctx context.Context, peerName string, data string) (interface{}, error) {
+	log.Infof("recv multi request msg from [%s], data len: %v", peerName, len(data))
+	skynet_cluster.Send(peerName, ".routersender", luaType, "MultiResponse", data)
 	return nil, nil
 }
 

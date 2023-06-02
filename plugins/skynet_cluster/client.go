@@ -4,12 +4,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/xingshuo/skyline/log"
-	"github.com/xingshuo/skyline/netframe"
-	"github.com/xingshuo/skyline/seri"
 	"math"
 	"os"
 	"sync"
+
+	"github.com/xingshuo/skyline/log"
+	"github.com/xingshuo/skyline/netframe"
+	"github.com/xingshuo/skyline/seri"
 )
 
 const (
@@ -40,13 +41,14 @@ func (cs *clusterSender) packPushRequest(address string, protoType int, msg []by
 		buf[2] = 0xc1
 		buf[3] = uint8(nameLen)
 		copy(buf[4:], address)
-		binary.LittleEndian.PutUint32(buf[4+nameLen:], cs.session)
-		buf[8+nameLen] = uint8(protoType)
-		binary.LittleEndian.PutUint32(buf[9+nameLen:], uint32(sz))
+		session := cs.session
 		cs.session++
 		if cs.session > math.MaxInt32 {
 			cs.session = 1
 		}
+		binary.LittleEndian.PutUint32(buf[4+nameLen:], session)
+		buf[8+nameLen] = uint8(protoType)
+		binary.LittleEndian.PutUint32(buf[9+nameLen:], uint32(sz))
 		part := (sz-1)/MULTI_PART + 1
 		offset := 0
 		var tmpBuf []byte
@@ -62,7 +64,7 @@ func (cs *clusterSender) packPushRequest(address string, protoType int, msg []by
 				tmpBuf[2] = 3 // the last multi part
 			}
 			binary.BigEndian.PutUint16(tmpBuf, uint16(s+5))
-			binary.LittleEndian.PutUint32(tmpBuf[3:], cs.session)
+			binary.LittleEndian.PutUint32(tmpBuf[3:], session)
 			copy(tmpBuf[7:], msg[offset:offset+s])
 			padding = append(padding, tmpBuf)
 			sz -= s
