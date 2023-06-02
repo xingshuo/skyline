@@ -16,6 +16,17 @@
 * 详见[skyline.go](https://github.com/xingshuo/skyline/blob/main/skyline.go#L33)
 * 注意: 没有`goroutine safe`备注的接口，只能在其对应Service的执行goroutine中被调用
 
+## Skynet cluster插件
+* 支持skynet cluster协议(cluster.send)
+* 注意: 对应skynet版本为[魔改版](https://github.com/xingshuo/skynet)
+* 测试流程:
+```bash
+examples/plugins/skynet_cluster目录下
+# go build && ./skynet_cluster
+# ln -sf $YOUR_SKYNET_PATH skynet
+# ./skynet/skynet skynet_config
+```
+
 ## Reference
 * https://github.com/cloudwu/skynet
 * https://github.com/topfreegames/pitaya
