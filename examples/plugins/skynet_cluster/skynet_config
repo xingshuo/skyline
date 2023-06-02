@@ -1,0 +1,9 @@
+thread = 4
+harbor = 0
+start = "main"
+lualoader = "./skynet/lualib/loader.lua"
+luaservice = "./?.lua;" .. "./skynet/service/?.lua;" .. "./skynet/service/?/main.lua;"
+lua_path = "./skynet/lualib/compat10/?.lua;" .. "./skynet/lualib/?.lua"
+lua_cpath = "./?.so;" .. "./skynet/luaclib/?.so"
+cpath = "./?.so;" .. "./skynet/cservice/?.so"
+cluster = "./skynet_clustername"

@@ -29,8 +29,9 @@ func (ra *RouterAgent) OnExit() {
 }
 
 func (ra *RouterAgent) Request(ctx context.Context, peerName string) (interface{}, error) {
-	log.Infof("recv request msg from %s", peerName)
-	skynet_cluster.Send(peerName, ".routersender", luaType, "Response", time.Now().Unix(), &seri.Table{
+	ts := time.Now().Unix()
+	log.Infof("recv request msg from [%s], ts: %v", peerName, ts)
+	m := &seri.Table{
 		Array: []interface{}{
 			-65538, "a", false, 3.1415926,
 		},
@@ -39,7 +40,8 @@ func (ra *RouterAgent) Request(ctx context.Context, peerName string) (interface{
 			"passwd": "dzqm0701",
 			"age":    33,
 		},
-	})
+	}
+	skynet_cluster.Send(peerName, ".routersender", luaType, "Response", ts, m)
 	return nil, nil
 }
 
@@ -51,8 +53,8 @@ func main() {
 		}
 		return nil
 	})
-	skynet_cluster.Init("skynet.json")
-	err := skynet_cluster.Open("skynet_plugin_server")
+	skynet_cluster.Init("skynet_clustername.json")
+	err := skynet_cluster.Open("go_server")
 	if err != nil {
 		log.Fatalf("skynet_cluster[Open] failed: %v", err)
 	}

@@ -144,7 +144,7 @@ func (c *skynetClient) Send(clusterName, svcName string, protoType int, args ...
 	if err != nil {
 		return err
 	}
-	buf, padding := s.packPushRequest(svcName, protoType, seri.SeriPack(args))
+	buf, padding := s.packPushRequest(svcName, protoType, seri.SeriPack(args...))
 	err = s.Send(buf)
 	if err != nil {
 		return err

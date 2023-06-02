@@ -1,5 +1,5 @@
 {
-  "ClusterName": "skynet_plugin_server",
+  "ClusterName": "go_server",
   "IsRecoverModel": false,
   "LogFilename": "",
   "LogLevel": 0,

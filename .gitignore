@@ -1,3 +1,5 @@
 .idea
 *.exe
 go.sum
+examples/plugins/skynet_cluster/skynet
+examples/plugins/skynet_cluster/skynet_cluster
